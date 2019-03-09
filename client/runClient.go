@@ -44,23 +44,29 @@ func main() {
 	}
 	defer conn.Close()
 
-	go getMessagesFromServer(&conn)
-
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		cmd := scanner.Text()
-		cmd = cmd + "\n"
-		conn.Write([]byte(cmd))
-	}
-
+	end := make(chan string)
+	go getMessagesFromServer(&conn, end)
+	go sendCommandsToServer(&conn)
+	finish := <-end
+	fmt.Println(finish)
 }
 
-func getMessagesFromServer(conn *net.Conn) {
+func getMessagesFromServer(conn *net.Conn, end chan string) {
 	scanner := bufio.NewScanner(*conn)
 	for scanner.Scan() {
 		fmt.Print("<- ")
 		response := scanner.Text()
 		fmt.Println(response)
+	}
+	end <- "___Connection closed___"
+}
+
+func sendCommandsToServer(conn *net.Conn) {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		cmd := scanner.Text()
+		cmd = cmd + "\n"
+		(*conn).Write([]byte(cmd))
 	}
 }
 
