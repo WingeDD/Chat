@@ -51,17 +51,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer listner.Close()
 
 	go acceptConnections(&listner, data)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
+		cmd := scanner.Text()
+		if cmd == "shutdown" {
+			fmt.Println("Server inactive")
+			break
+		}
 		// можно добавить управление сервером, например, добавление комнат или бан пользователей
 	}
 }
 
 func acceptConnections(listner *net.Listener, data *serverData) {
+	defer (*listner).Close()
 	for {
 		conn, err := (*listner).Accept()
 		if err != nil {
@@ -103,7 +108,7 @@ func handleConnection(conn *net.Conn, data *serverData) {
 		} else if subPattern.MatchString(cmd) {
 			params := subPattern.FindStringSubmatch(cmd)
 			if warn, ok := data.registerInRoom(params[1], params[2], name); ok {
-				(*conn).Write([]byte(fmt.Sprintf("You successfully connected to the room %s\nMessage history of the room:\n", params[1])))
+				(*conn).Write([]byte(fmt.Sprintf("You successfully connected to the room %s. Message history:\n", params[1])))
 				data.sendRoomHistory(conn, params[1])
 			} else {
 				(*conn).Write([]byte(warn))

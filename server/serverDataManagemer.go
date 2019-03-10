@@ -71,12 +71,10 @@ func (data *serverData) verifyPublish(room, msg, name string) (string, string, b
 	if roomMap, ok := data.subscribers[room]; ok {
 		if nick, ok := roomMap[name]; ok {
 			return "", nick, true
-		} else {
-			return fmt.Sprintf("You should subscribe room %s before sending messages\n", room), "", false
 		}
-	} else {
-		return fmt.Sprintf("Room with name %s doesn`t exist\n", room), "", false
+		return fmt.Sprintf("You should subscribe room %s before sending messages\n", room), "", false
 	}
+	return fmt.Sprintf("Room with name %s doesn`t exist\n", room), "", false
 }
 
 func (data *serverData) addMsg(room, msg, nick string) {
@@ -93,7 +91,7 @@ func (data *serverData) sendOutMessage(room, msg, name, nick string) {
 	defer data.mu.Unlock()
 	for key := range data.subscribers[room] {
 		if key != name {
-			data.users[key].channel <- "New message in room " + room + " by " + nick + ":\n" + msg + "\n"
+			data.users[key].channel <- "New message in room " + room + " by " + nick + ": " + msg + "\n"
 		}
 	}
 }
@@ -105,18 +103,16 @@ func (data *serverData) registerInRoom(room, nick, name string) (string, bool) {
 	if roomMap, ok := data.subscribers[room]; ok {
 		if _, ok := roomMap[name]; ok {
 			return fmt.Sprintf("You are already subscribed on this room\n"), false
-		} else {
-			for _, usedNick := range data.subscribers[room] {
-				if usedNick == nick {
-					return fmt.Sprintf("Nickname %s is already used in this room\n", usedNick), false
-				}
-			}
-			data.subscribers[room][name] = nick
-			return "", true
 		}
-	} else {
-		return fmt.Sprintf("Room with name %s doesn`t exist\n", room), false
+		for _, usedNick := range data.subscribers[room] {
+			if usedNick == nick {
+				return fmt.Sprintf("Nickname %s is already used in this room\n", usedNick), false
+			}
+		}
+		data.subscribers[room][name] = nick
+		return "", true
 	}
+	return fmt.Sprintf("Room with name %s doesn`t exist\n", room), false
 }
 
 func (data *serverData) sendRoomHistory(conn *net.Conn, room string) {
