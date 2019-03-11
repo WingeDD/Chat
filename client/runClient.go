@@ -65,8 +65,7 @@ func sendCommandsToServer(conn *net.Conn) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		cmd := scanner.Text()
-		cmd = cmd + "\n"
-		(*conn).Write([]byte(cmd))
+		(*conn).Write(append([]byte(cmd), 10)) //+\n
 	}
 }
 

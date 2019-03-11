@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"net"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestGetConfig(t *testing.T) {
@@ -29,5 +32,33 @@ func TestGetConfig(t *testing.T) {
 		t.Errorf("Cfg is not nil using bad config file\n")
 	} else if err == nil {
 		t.Errorf("Error is nil while using bad config file\n")
+	}
+}
+
+func handleConnection(conn net.Conn) {
+	conn.Write([]byte("hello"))
+	conn.Close()
+}
+
+func dummyServer() {
+	listner, _ := net.Listen("tcp", ":1231")
+	for {
+		conn, _ := listner.Accept()
+		go handleConnection(conn)
+	}
+}
+
+func TestGetMessagesFromServer(t *testing.T) {
+	go dummyServer()
+	time.Sleep(time.Millisecond)
+	conn, _ := net.Dial("tcp", ":1231")
+	ch := make(chan string)
+	go getMessagesFromServer(&conn, ch)
+	timer := time.NewTimer(time.Second)
+	select {
+	case <-timer.C:
+		t.Errorf("Test failed\n")
+	case <-ch:
+		fmt.Println("Test passed")
 	}
 }
