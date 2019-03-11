@@ -51,7 +51,7 @@ func main() {
 	const configFileName = "serverConfig.json"
 	cfg, err := getConfig(configFileName)
 	if err != nil {
-		fmt.Printf("Error\n\r%s\n\rServing without rooms from config.json\n", err.Error())
+		fmt.Printf("Error\n%s\nServing without rooms from config.json\n", err.Error())
 		cfg = &Config{
 			Address: ":8080",
 			Rooms:   []string{"defaultRoom"},

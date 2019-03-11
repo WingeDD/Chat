@@ -58,7 +58,6 @@ func getMessagesFromServer(conn *net.Conn, end chan string) {
 		response := scanner.Text()
 		fmt.Println(response)
 	}
-	fmt.Println(conn)
 	end <- "___Connection closed___"
 }
 
