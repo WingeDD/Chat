@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"reflect"
@@ -8,13 +9,16 @@ import (
 	"time"
 )
 
+type order struct { //запросы и ответы во времени
+	client int    //number
+	action string // r/w
+}
+
 type testCase struct {
-	name       string
-	requests1  []string
-	requests2  []string
-	responses1 []string
-	responses2 []string
-	order      []byte //1121111221111121...
+	name      string
+	requests  [][]string
+	responses [][]string
+	ord       []order
 }
 
 func TestGetConfig(t *testing.T) {
@@ -50,120 +54,235 @@ func TestGetConfig(t *testing.T) {
 }
 
 func TestMain(t *testing.T) {
+	const clientsNum = 2
 	srv := initserverData(254, 128, ":8080", []string{"room1", "room2", "room3", "room4"})
 	go srv.Run()
-	time.Sleep(time.Millisecond)
-	conn1, err := net.Dial("tcp", ":8080")
-	if err != nil {
-		t.Error("Can`t connect to server\n")
-	} else {
-		fmt.Println("Connection test1 passed")
+	time.Sleep(5 * time.Millisecond)
+
+	connections := make([]net.Conn, clientsNum)
+	for i := 0; i < clientsNum; i++ {
+		con, err := net.Dial("tcp", ":8080")
+		connections[i] = con
+		if err != nil {
+			t.Error("Can`t connect to server\n")
+			return
+		} else {
+			fmt.Printf("Connection test%d passed\n", i)
+			defer connections[i].Close()
+		}
 	}
-	defer conn1.Close()
-	conn2, err := net.Dial("tcp", ":8080")
-	if err != nil {
-		t.Error("Can`t connect to server\n")
-	} else {
-		fmt.Println("Connection test2 passed")
-	}
-	defer conn2.Close()
 
 	//////////////////////////////////
-	time.Sleep(time.Second)
+	time.Sleep(time.Millisecond)
 
-	buf := make([]byte, len([]byte("Welcome!\n")))
-	conn1.Read(buf)
-	if string(buf) != "Welcome!\n" {
-		t.Errorf("expected: %+v; got: %+v\n", "Welcome!\n", string(buf))
-	} else {
-		fmt.Println("Recieving test1 passed")
+	for i := 0; i < clientsNum; i++ {
+		buf := make([]byte, len([]byte("Welcome!\n")))
+		connections[i].Read(buf)
+		if string(buf) != "Welcome!\n" {
+			t.Errorf("expected: %+v; got: %+v\n", "Welcome!\n", string(buf))
+		} else {
+			fmt.Printf("Recieving test%d passed\n", i)
+		}
 	}
-	buf = make([]byte, len([]byte("Welcome!\n")))
-	conn2.Read(buf)
-	if string(buf) != "Welcome!\n" {
-		t.Errorf("expected: %+v; got: %+v\n", "Welcome!\n", string(buf))
-	} else {
-		fmt.Println("Recieving test2 passed")
-	}
-	/*
-		///////////////////////////////////
-		tests := []testCase{
-			testCase{
-				name: "casual",
-				requests1: []string{
-					"qweqwe",
-					"123eq",
+
+	///////////////////////////////////
+	tests := []testCase{
+		testCase{
+			name: "casual",
+			requests: [][]string{
+				[]string{
+					"qweqwe\n",
+					"subscribe room1 : cl1\n",
+					"subscribe room2 : cl1\n",
+					"publish room1 : hey\n",
+					"publish room1 : its me\n",
 				},
-				requests2: []string{},
-				responses1: []string{
-					"Unknown command\n",
-					"Unknown command\n",
+				[]string{
+					"subscribe room1 : cl2\n",
+					"subscribe room2 : cl2\n",
+					"publish room2 : 123\n",
 				},
-				responses2: []string{},
-				order:      []byte{1, 1},
 			},
-			// testCase{
-			// 	name:       "",
-			// 	requests1:  []string{},
-			// 	requests2:  []string{},
-			// 	responses1: []string{},
-			// 	responses2: []string{},
-			// 	order:      []byte{},
-			// },
-			// testCase{
-			// 	name:       "",
-			// 	requests1:  []string{},
-			// 	requests2:  []string{},
-			// 	responses1: []string{},
-			// 	responses2: []string{},
-			// 	order:      []byte{},
-			// },
-			// testCase{
-			// 	name:       "",
-			// 	requests1:  []string{},
-			// 	requests2:  []string{},
-			// 	responses1: []string{},
-			// 	responses2: []string{},
-			// 	order:      []byte{},
-			// },
-		}
+			responses: [][]string{
+				[]string{
+					"Unknown command\n",
+					"You successfully connected to the room room1. Message history:\n",
+					"You successfully connected to the room room2. Message history:\n",
+					"You successfully published the message\n",
+					"You successfully published the message\n",
+					"New message in room room2 by cl2: 123\n",
+				},
+				[]string{
+					"You successfully connected to the room room1. Message history:\n",
+					"cl1: hey\n",
+					"cl1: its me\n",
+					"You successfully connected to the room room2. Message history:\n",
+					"You successfully published the message\n",
+				},
+			},
+			ord: []order{
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+				order{
+					client: 1,
+					action: "w",
+				},
+				order{
+					client: 1,
+					action: "r",
+				},
+				order{
+					client: 1,
+					action: "r",
+				},
+				order{
+					client: 1,
+					action: "r",
+				},
+				order{
+					client: 1,
+					action: "w",
+				},
+				order{
+					client: 1,
+					action: "r",
+				},
+				order{
+					client: 1,
+					action: "w",
+				},
+				order{
+					client: 1,
+					action: "r",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+			},
+		},
+		testCase{
+			name: "too long message",
+			requests: [][]string{
+				[]string{
+					"subscribe room3 : cl1\n",
+					"publish room3 : qweqweqweqweqweqweqweqweqweqweqweqweqweqweqweqweqweqeqweqweqweqweqweqweqqeqweqewqeweqwqeweqweqwweqqweqweqweewqewqweeqwqeweqweqweqweqweqweqwewqweqweqweqweqweqweqewqewqweqweqweqweqweqweqweqweqweqweqweqweqweqweqweqweqwekqwemqkwmekqmwemqwkemqkwmekqwmemqwkemkqwmeqwkekqrnqweruqwequrqwjrqwjqriwqwrojiqrwji\n",
+				},
+				[]string{},
+			},
+			responses: [][]string{
+				[]string{
+					"You successfully connected to the room room3. Message history:\n",
+					"Sorry, but your message is too long (299 bytes). Maximum size is 254 bytes\n",
+				},
+				[]string{},
+			},
+			ord: []order{
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+				order{
+					client: 0,
+					action: "w",
+				},
+				order{
+					client: 0,
+					action: "r",
+				},
+			},
+		},
+	}
 
-		for _, tcase := range tests {
-			ind1 := 0
-			ind2 := 0
-			condition := true
-			for _, clientN := range tcase.order {
-				if clientN == 1 {
-					conn1.Write([]byte(tcase.requests1[ind1]))
-					buf := make([]byte, len(tcase.responses1[ind1]))
-					time.Sleep(5 * time.Millisecond)
-					fmt.Println("1")
-					conn1.Read(buf)
-					fmt.Println("2")
-					if string(buf) != tcase.responses1[ind1] {
-						condition = false
-						t.Errorf("in test case: %s, conn1 i=%d expected %s got %s\n", tcase.name, ind1, tcase.responses1[ind1], string(buf))
-					}
-					ind1++
-				} else {
-					conn2.Write([]byte(tcase.requests2[ind2]))
-					buf := make([]byte, len(tcase.responses2[ind2]))
-					time.Sleep(5 * time.Millisecond)
-					conn1.Read(buf)
-					if string(buf) != tcase.responses1[ind2] {
-						condition = false
-						t.Errorf("in test case: %s, conn1 i=%d expected %s got %s\n", tcase.name, ind2, tcase.responses2[ind2], string(buf))
-					}
-					ind2++
+	for _, tcase := range tests {
+		currentIndexesW := make([]int, len(tcase.requests))
+		currentIndexesR := make([]int, len(tcase.responses))
+		condition := true
+		for _, ord := range tcase.ord {
+			time.Sleep(time.Millisecond)
+			if ord.action == "r" {
+				buf := make([]byte, len(tcase.responses[ord.client][currentIndexesR[ord.client]]))
+				connections[ord.client].Read(buf)
+				if !bytes.Equal(buf, []byte(tcase.responses[ord.client][currentIndexesR[ord.client]])) {
+					condition = false
+					t.Errorf("in test case: %s, connection%d iter=%d expected: %s got: %s\n%v\n%v\n", tcase.name, ord.client, currentIndexesR[ord.client], tcase.responses[ord.client][currentIndexesR[ord.client]], string(buf), []byte(tcase.responses[ord.client][currentIndexesR[ord.client]]), buf)
 				}
-			}
-			if condition {
-				fmt.Println("test case", tcase.name, "passed")
+				currentIndexesR[ord.client]++
+			} else if ord.action == "w" {
+				connections[ord.client].Write([]byte(tcase.requests[ord.client][currentIndexesW[ord.client]]))
+				currentIndexesW[ord.client]++
+			} else {
+				fmt.Println("bad case!")
+				return
 			}
 		}
+		if condition {
+			fmt.Println("test case", tcase.name, "passed")
+		}
+	}
 
-	*/
+	//////////////////////////////
 
-	// +overbunden test
+	connections[0].Write([]byte("subscribe room4 : cl1\n"))
+	connections[0].Write([]byte("publish room4 : first msg\n"))
+	for i := 0; i < 129; i++ {
+		connections[0].Write([]byte("publish room4 : others\n"))
+	}
+	time.Sleep(time.Second)
+	connections[1].Write([]byte("subscribe room4 : cl2\n"))
+	time.Sleep(time.Millisecond)
+	buf1 := make([]byte, len("You successfully connected to the room room4. Message history:\n"))
+	buf2 := make([]byte, len("cl1: others\n"))
+	connections[1].Read(buf1)
+	connections[1].Read(buf2)
+	if string(buf1) != "You successfully connected to the room room4. Message history:\n" || string(buf2) != "cl1: others\n" {
+		t.Errorf("Extra messages are not deleted\n")
+	} else {
+		fmt.Println("overflow test passed")
+	}
 
+	///////////////////////////
+	srv.Stop()
 }

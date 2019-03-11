@@ -22,6 +22,7 @@ type server struct {
 	maxMsgSize  int
 	maxMsgsNum  int
 	control     chan string
+	active      bool
 	users       map[string]user              // ключ - conn.RemoteAddr().String()
 	messages    map[string][]string          //ключ - комната
 	subscribers map[string]map[string]string // ключ - комната, значение - map: ключ - conn.RemoteAddr().String(), значение - ник в этой комнате
@@ -32,13 +33,14 @@ func (srv *server) Run() {
 	if err != nil {
 		panic(err)
 	}
-
+	srv.active = true //чтобы убить вызваные сервером горутины по комманде shutdown в случе, если на этом не заканчивется горутина, в которой крутился сервер
 	go srv.acceptConnections(&listner)
 	go srv.checkSTDIN()
 
 	for cmd := range srv.control {
 		if cmd == "shutdown" {
 			fmt.Println("server inactive")
+			srv.active = false
 			break
 		}
 		// можно добавить управление сервером, например, добавление комнат или бан пользователей
@@ -83,7 +85,7 @@ func (srv *server) verifyPublish(room, msg, name string) (string, string, bool) 
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	if len(msg) > srv.maxMsgSize {
-		return fmt.Sprintf("Sorry, but your message is too big (%d bytes). Maximum size is %d bytes\n", len(msg), srv.maxMsgSize), "", false
+		return fmt.Sprintf("Sorry, but your message is too long (%d bytes). Maximum size is %d bytes\n", len(msg), srv.maxMsgSize), "", false
 	}
 	if roomMap, ok := srv.subscribers[room]; ok {
 		if nick, ok := roomMap[name]; ok {
@@ -127,6 +129,7 @@ func (srv *server) registerInRoom(room, nick, name string) (string, bool) {
 			}
 		}
 		srv.subscribers[room][name] = nick
+		srv.users[name].nameInRoom[room] = nick
 		return "", true
 	}
 	return fmt.Sprintf("Room with name %s doesn`t exist\n", room), false
@@ -143,6 +146,9 @@ func (srv *server) sendRoomHistory(conn *net.Conn, room string) {
 func (srv *server) acceptConnections(listner *net.Listener) {
 	defer (*listner).Close()
 	for {
+		if srv.active == false {
+			break
+		}
 		conn, err := (*listner).Accept()
 		if err != nil {
 			fmt.Printf("Connection error: %s\n", err.Error())
@@ -165,6 +171,9 @@ func (srv *server) handleConnection(conn *net.Conn) {
 	subPattern := regexp.MustCompile("^subscribe ([0-9A-Za-z_]+)[\t\n\r\f ]*:[\t\n\r\f ]*([0-9A-Za-z_]+)$")
 	scanner := bufio.NewScanner(*conn)
 	for scanner.Scan() {
+		if srv.active == false {
+			break
+		}
 		cmd := scanner.Text()
 		fmt.Println("Recieved", cmd)
 		if cmd == "exit" {
@@ -196,6 +205,9 @@ func (srv *server) handleConnection(conn *net.Conn) {
 
 func (srv *server) getMessages(conn *net.Conn, ch chan string) {
 	for msg := range ch {
+		if srv.active == false {
+			break
+		}
 		if strings.HasPrefix(msg, "New message") {
 			(*conn).Write([]byte(msg))
 		} else {
